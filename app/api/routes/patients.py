@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Body
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -14,6 +14,7 @@ from app.schemas.patient import (
     MedicationUpdate,
     NoteCreate,
     NoteRead,
+    DoseRead,
 )
 from app.crud.crud_patient import (
     get_patients,
@@ -27,9 +28,15 @@ from app.crud.crud_patient import (
     complete_medication,
     add_note,
     get_patients_by_assistant,
+    administer_dose,
+    cancel_medication,
+    get_pending_doses,
 )
 from app.api.deps import get_current_active_user, get_current_user_with_role
-from app.services.notifications import check_and_send_medication_notifications
+from app.services.notifications import (
+    check_and_send_medication_notifications,
+    check_and_send_dose_notifications,
+)
 
 router = APIRouter()
 
@@ -224,3 +231,81 @@ def reset_medication_time(
     db.refresh(medication)
 
     return medication
+
+
+@router.post("/doses/{dose_id}/administer", response_model=DoseRead)
+def administer_patient_dose(
+    dose_id: int,
+    background_tasks: BackgroundTasks,
+    data: dict = Body(...),  # Recibimos todo el cuerpo como dict
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Marcar una dosis como administrada"""
+    try:
+        # Extraemos las notas del cuerpo JSON
+        notes = data.get("notes") if data else None
+
+        db_dose = administer_dose(db, dose_id, current_user.id, notes)
+
+        # Verificar próximas notificaciones
+        # Nota: Ahora que tenemos un solo sistema, usamos solo check_dose
+        background_tasks.add_task(check_and_send_dose_notifications, db)
+
+        return db_dose
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=400, detail=f"Error administering dose: {str(e)}"
+        )
+
+
+# Nuevo endpoint para cancelar un tratamiento
+@router.post("/medications/{medication_id}/cancel", response_model=MedicationRead)
+def cancel_patient_medication(
+    medication_id: int,
+    db: Session = Depends(get_db),
+    # Solo admin y doctores pueden cancelar medicaciones
+    current_user: User = Depends(get_current_user_with_role(["admin", "doctor"])),
+):
+    """Cancelar un tratamiento en curso"""
+    try:
+        return cancel_medication(db, medication_id, current_user.id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=400, detail=f"Error cancelling medication: {str(e)}"
+        )
+
+
+# Nuevo endpoint para obtener dosis pendientes de un paciente
+@router.get("/{patient_id}/pending-doses/", response_model=List[DoseRead])
+def read_patient_pending_doses(
+    patient_id: int,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Obtener todas las dosis pendientes para un paciente"""
+    # Verificar permisos - similar a read_patient
+    db_patient = get_patient(db, patient_id=patient_id)
+    if db_patient is None:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    # Un asistente solo puede ver sus propios pacientes asignados
+    if current_user.role == "assistant" and db_patient.assistant_id != current_user.id:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to view this patient's doses"
+        )
+
+    try:
+        return get_pending_doses(db, patient_id, skip, limit)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=400, detail=f"Error retrieving pending doses: {str(e)}"
+        )

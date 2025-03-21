@@ -6,6 +6,7 @@ from sqlalchemy import (
     Text,
     ForeignKey,
     Boolean,
+    Float,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -20,6 +21,7 @@ class Patient(Base):
     species = Column(String)
     created_by = Column(Integer, ForeignKey("users.id"))
     assistant_id = Column(Integer, ForeignKey("users.id"))
+    assistant_name = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -38,16 +40,43 @@ class Medication(Base):
     patient_id = Column(Integer, ForeignKey("patients.id"))
     name = Column(String)
     dosage = Column(String)
-    frequency = Column(String)
+    frequency = Column(Float)
+    start_time = Column(DateTime(timezone=True))
+    duration_days = Column(Integer)
+    status = Column(String, default="active")  # active, completed, cancelled
+    created_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=True)
+
     next_dose_time = Column(DateTime(timezone=True))
     completed = Column(Boolean, default=False)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     completed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
     notification_sent = Column(Boolean, default=False)
 
     patient = relationship("Patient", back_populates="medications")
+    doses = relationship(
+        "Dose", back_populates="medication", cascade="all, delete-orphan"
+    )
     completed_by_user = relationship("User", foreign_keys=[completed_by])
+
+
+class Dose(Base):
+    __tablename__ = "doses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    medication_id = Column(Integer, ForeignKey("medications.id"))
+    scheduled_time = Column(DateTime(timezone=True))  # hora programada
+    status = Column(String, default="pending")  # "pending", "administered", "missed"
+    administration_time = Column(DateTime(timezone=True), nullable=True)  # hora real
+    administered_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    notes = Column(String, nullable=True)
+    notification_sent = Column(
+        Boolean, default=False
+    )  # Para el sistema de notificaciones
+
+    medication = relationship("Medication", back_populates="doses")
+    administered_by_user = relationship("User", foreign_keys=[administered_by])
 
 
 class Note(Base):

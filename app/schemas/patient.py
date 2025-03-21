@@ -6,18 +6,25 @@ from datetime import datetime
 class MedicationBase(BaseModel):
     name: str
     dosage: str
-    frequency: int
+    frequency: float
 
 
 class MedicationCreate(MedicationBase):
-    pass
+    start_time: Optional[datetime] = None
+    duration_days: float
+
+    class Config:
+        from_attributes = True
 
 
 class MedicationUpdate(BaseModel):
     name: Optional[str] = None
     dosage: Optional[str] = None
-    frequency: Optional[int] = None
+    frequency: Optional[float] = None
     completed: Optional[bool] = None
+    completed_by: Optional[int] = None
+    status: Optional[str] = None
+    duration_days: Optional[int] = None
 
 
 class MedicationRead(MedicationBase):
@@ -28,7 +35,10 @@ class MedicationRead(MedicationBase):
     completed_at: Optional[datetime] = None
     completed_by: Optional[int] = None
     created_at: datetime
-    notification_sent: bool
+    status: str = "active"
+    start_time: Optional[datetime] = None
+    duration_days: Optional[int] = None
+    doses: List["DoseRead"] = []
 
     class Config:
         from_attributes = True
@@ -56,6 +66,7 @@ class PatientBase(BaseModel):
     name: str
     species: str
     assistant_id: int
+    assistant_name: Optional[str] = None
 
 
 class PatientCreate(PatientBase):
@@ -76,6 +87,33 @@ class PatientRead(PatientBase):
     updated_at: Optional[datetime] = None
     medications: List[MedicationRead] = []
     notes: List[NoteRead] = []
+    assistant_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class DoseBase(BaseModel):
+    scheduled_time: datetime
+    status: str = "pending"
+    administration_time: Optional[datetime] = None
+    administered_by: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class DoseCreate(DoseBase):
+    pass
+
+
+class DoseUpdate(BaseModel):
+    status: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class DoseRead(DoseBase):
+    id: int
+    medication_id: int
+    notification_sent: bool = False
 
     class Config:
         from_attributes = True

@@ -5,7 +5,13 @@ from typing import List
 from app.db.base import get_db
 from app.models.user import User
 from app.schemas.user import UserCreate, UserRead, UserUpdate
-from app.crud.crud_user import get_users, create_user, get_user, update_user
+from app.crud.crud_user import (
+    get_users,
+    create_user,
+    get_user,
+    update_user,
+    get_users_by_role,
+)
 from app.api.deps import get_current_active_user, get_current_user_with_role
 
 router = APIRouter()
@@ -19,6 +25,19 @@ def read_users(
     current_user: User = Depends(get_current_user_with_role(["admin"])),
 ):
     users = get_users(db, skip=skip, limit=limit)
+    return users
+
+
+# List users with the role "asistant" without the need of being an admin
+# Just being authenticated
+@router.get("/assistants", response_model=List[UserRead])
+def read_assistants(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    users = get_users_by_role(db, role="assistant", skip=skip, limit=limit)
     return users
 
 

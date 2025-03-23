@@ -11,6 +11,7 @@ from app.crud.crud_user import (
     get_user,
     update_user,
     get_users_by_role,
+    delete_user,
 )
 from app.api.deps import get_current_active_user, get_current_user_with_role
 
@@ -97,3 +98,12 @@ def update_user_info(
         )
 
     return update_user(db, user_id=user_id, user=user_data)
+
+
+@router.delete("/{user_id}", response_model=UserRead)
+def delete_user_info(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_with_role(["admin"])),
+):
+    return delete_user(db, user_id=user_id)

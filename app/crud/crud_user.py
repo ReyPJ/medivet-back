@@ -85,6 +85,25 @@ def update_user(db: Session, user_id: int, user: UserUpdate) -> User:
     return db_user
 
 
+def delete_user(db: Session, user_id: int) -> User:
+    db_user = get_user(db, user_id)
+    if not db_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    # Prevent deletion himself
+    if db_user.role == "admin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Admin user cannot be deleted",
+        )
+
+    db.delete(db_user)
+    db.commit()
+    return db_user
+
+
 def authenticate_user(db: Session, username: str, password: str) -> User:
     user = get_user_by_username(db, username)
     if not user:
